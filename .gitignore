@@ -1,0 +1,7 @@
+node_modules
+acceso
+**/.DS_Store
+.vscode
+**/*.prproj
+**/*.mp*
+**/*.mov
