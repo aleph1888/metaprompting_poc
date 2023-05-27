@@ -50,7 +50,7 @@ export class Analytics {
 	async memoryIsEmpty(promptText: string, newAnalytics: any, response: string, mood: string, book: Book) {
 
 		console.log("Current memory state...");
-		if (BM.getMemAsString()) {
+		if (!BM.getMemAsString() || BM.memory.length == 0) {
 			console.log("Current memory state... EMPTY");
 			console.log(" ");
 			console.warn("First time, new memory:\n", JSON.stringify(newAnalytics, null, "\t"));
