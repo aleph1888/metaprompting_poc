@@ -3,6 +3,7 @@ import { Lite } from "./lite";
 export const MEMORY_BREAK = "\n\n **Estado de la memoria**: \n";
 export const EMPTY_MEMORY = [{ "topic": "Empty" }];
 export const MEMORY_PROMPT = "Usa la siguiente memoria para contextualizar tu respuesta: %memory.";
+export const ERROR_TOPIC = "Error handling";
 
 export class BM extends Lite {
 
@@ -23,6 +24,10 @@ export class BM extends Lite {
 	static setAnalytics(newAnalytics: any) {
 
 		console.log("Updating Memory: ");
+		if (newAnalytics.topic == ERROR_TOPIC) {
+			console.warn("ERROR_TOPIC found, skipping...");
+			return;
+		}
 		this.memory[0] = JSON.stringify(newAnalytics);
 	}
 
@@ -32,6 +37,19 @@ export class BM extends Lite {
 			return "";
 		}
 		return JSON.stringify(this.memory[0]);
+	}
+
+	static getMemAsChunkChain(chunkSize: number): string[] {
+		return this.getDataAsChunkChain(chunkSize, this.getMemAsString());
+	}
+
+	static getDataAsChunkChain(chunkSize: number, data: string): string[] {
+		const chunks = [];
+		let i = 0, n = data.length;
+		while (i < n) {
+			chunks.push(data.slice(i, i += chunkSize));
+		}
+		return chunks;
 	}
 
 	static getAsJsonMarkdown() {

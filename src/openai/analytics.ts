@@ -1,5 +1,5 @@
 import { ChatCompletionRequestMessageRoleEnum } from "openai";
-import { BM } from "./memoria/base-memory";
+import { BM, ERROR_TOPIC } from "./memoria/base-memory";
 import { Api } from "./api";
 import { Book } from "./book";
 import { existsSync, mkdirSync } from "fs";
@@ -73,7 +73,7 @@ export class Analytics {
 
 	async hasAnalytics(promptText: string, newAnalytics: any, response: string, mood: string, book: Book) {
 
-		if (!newAnalytics) {
+		if (!newAnalytics || newAnalytics?.topic == ERROR_TOPIC) {
 			console.warn("- ", new Date().toTimeString(), "analyticsIsEmpty!!!");
 			await this.mb.add(book, {
 				who: mood,

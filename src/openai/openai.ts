@@ -4,10 +4,11 @@ import { Entry, Lite } from "./memoria/lite";
 import { MessageAttachment } from 'discord.js';
 import { existsSync } from "fs";
 import { ANALYTICS_PROMPT, Analytics } from "./analytics";
-import { BM, MEMORY_BREAK } from "./memoria/base-memory";
+import { BM, MEMORY_BREAK, MEMORY_PROMPT } from "./memoria/base-memory";
 import { Api } from "./api";
 import { Book } from "./book";
 import { PROMPTS } from "./commands";
+import { MEMORY_HISTORIC, STORY_PROMPT } from "./story";
 
 export enum userLabels {
 	CANT_ACCESS_MEMORY = "La memoria no se puede leer:",
@@ -37,9 +38,11 @@ export enum userLabels {
 const MARKDOWN_PROMPT = "Formatea todo con markdown resaltando en negrita las ideas principales, usa cursiva para las citas, etc; devuelve el código sin interpretar, para que lo pueda copiar. \n";
 
 const MOOD_PROMPT = "Interpreta y responde como lo haría %mood. No te salgas del papel ni aclares que eres una inteligencia artificial. Contesta en primera persona del singular. ";
+const MOOD_PROMPT2 = STORY_PROMPT + MEMORY_HISTORIC;
 const MARKS_PROMPT = "Sitúa el foco de tu respuesta en responder a: %prompt."
 
 const HELLO_PROMPT = PROMPTS.simple + " Preséntate. Di hola, quién eres, dónde vives, qué haces para ganarte la vida. Incluye una lista enumerada con tus hitos más importantes.";
+const HELLO_PROMPT2 = PROMPTS.simple + " Sugiéreme un código para los prompts y di si estás lista.";
 
 export class OpenAI {
 
@@ -59,17 +62,28 @@ export class OpenAI {
 	public async setIdentity(message: Message) {
 		this.mood = message.content.replace(PROMPTS.setIdentity, "");
 
-		message.content = HELLO_PROMPT;
+		message.content = HELLO_PROMPT2;
 		BM.setEmpty();
 		await this.triggerPrompt(message);
 	}
 
 	public async getMemory(message: Message) {
 
-		message.content = userLabels.MEMORY_SCREEN
-			.replace("%mood", this.mood)
-			.replace("%memory", BM.getMemAsString());
-		message.reply(message.content);
+		const chunks = BM.getMemAsChunkChain(1900);
+
+		const mem = chunks.length > 0 ? chunks[0] : '';
+
+		if (mem) {
+			message.content = userLabels.MEMORY_SCREEN
+				.replace("%mood", this.mood)
+				.replace("%memory", mem);
+			message.reply(message.content);
+		}
+
+		if (chunks.length > 1) {
+			message.content = chunks[1];
+			message.reply(message.content);
+		}
 
 	}
 
@@ -115,9 +129,10 @@ export class OpenAI {
 		const prompt = message.content.replace(PROMPTS.simple, "");
 
 		const response = await this.queryToApi(
-			MOOD_PROMPT.replace("%mood", this.mood),
+			MOOD_PROMPT2.replace("%mood", this.mood),
 			prompt
 		)
+		console.log("** Prompting is back from API");
 
 		const totalMessage = response.result + MEMORY_BREAK + BM.getAsJsonMarkdown();
 
@@ -125,8 +140,19 @@ export class OpenAI {
 			console.log("Original message with lenght", totalMessage.length, "croping to 2 chunks of 1900");
 			let finalMessage = totalMessage.substring(0, 1900);
 			message.reply(finalMessage || "");
+
 			finalMessage = totalMessage.substring(1900);
-			message.reply(finalMessage || "");
+
+			if (totalMessage.length > 1900) {
+				finalMessage = totalMessage.substring(1900, 3800);
+				try {
+					message.reply(finalMessage || "");
+				} catch (error) {
+					console.log("Response too long to send to chat", error.message);
+				}
+			} else {
+				message.reply(finalMessage || "");
+			}
 		} else {
 			message.reply(totalMessage || "");
 		}
@@ -187,7 +213,8 @@ export class OpenAI {
 				});
 				return;
 			} else {
-				message.reply("```json \n" + JSON.stringify(requested.keys, null, "\t") + "\n```");
+				const data = "```json \n" + JSON.stringify(requested.keys, null, "\t") + "\n```";
+				BM.getDataAsChunkChain(1900, data).forEach((chunk) => message.reply(chunk));
 			}
 			newAnalytics = requested.keys;
 		};
@@ -272,7 +299,20 @@ export class OpenAI {
 		const rows: Entry[] = await this.lite.getAll(this.book);
 		const list = await this.book.getBookEntriesAsMenuOption(rows);
 
-		message.reply(this.getMenuList(userLabels.BOOK_ENTRIES_INDEX, list));
+
+		const chunks = BM.getDataAsChunkChain(1900, this.getMenuList(userLabels.BOOK_ENTRIES_INDEX, list));
+
+		const mem = chunks.length > 0 ? chunks[0] : '';
+
+		if (mem) {
+			message.content = mem;
+			message.reply(message.content);
+		}
+
+		if (chunks.length > 1) {
+			message.content = chunks[1];
+			message.reply(message.content);
+		}
 
 	}
 
@@ -287,12 +327,22 @@ export class OpenAI {
 		if (book.fsError) {
 			const l = userLabels.BOOK_NAME_INVALID + key + "\n";
 
-			message.reply(
-				this.getMenuList(
-					userLabels.BOOK_ENTRIES_INDEX,
-					Book.getBooksList()
-				)
-			);
+			const chunks = BM.getDataAsChunkChain(1900, this.getMenuList(
+				userLabels.BOOK_ENTRIES_INDEX,
+				Book.getBooksList()
+			));
+
+			const mem = chunks.length > 0 ? chunks[0] : '';
+
+			if (mem) {
+				message.content = mem;
+				message.reply(message.content);
+			}
+
+			if (chunks.length > 1) {
+				message.content = chunks[1];
+				message.reply(message.content);
+			}
 			return;
 		}
 
